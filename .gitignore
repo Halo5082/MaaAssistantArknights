@@ -71,6 +71,7 @@ x86/
 bld/
 [Bb]in/
 [Oo]bj/
+**/.avalonia-build-tasks/
 [Ll]og/
 [Ll]ogs/
 cmake-build-debug/
