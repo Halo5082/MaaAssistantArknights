@@ -65,7 +65,7 @@ jobs:
             os: windows-2025-vs2026
             rid: win-x64
             self_contained: true
-            cmake_preset: windows-publish-x64
+            cmake_preset: windows-unified-publish-x64
             maadeps_triplet: x64-windows
           - name: linux-x64
             os: ubuntu-latest
