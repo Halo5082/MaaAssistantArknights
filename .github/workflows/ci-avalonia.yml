@@ -115,6 +115,11 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Install dmgbuild (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: python3 -m pip install dmgbuild
+
       - name: Restore app
         run: dotnet restore src/MAAUnified/App/MAAUnified.App.csproj
 
