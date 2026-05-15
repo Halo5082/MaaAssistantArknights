@@ -57,8 +57,6 @@ jobs:
     name: Build ${{ matrix.name }}
     needs: meta
     runs-on: ${{ matrix.os }}
-    env:
-      MAAUNIFIED_STAGING_DIR: ${{ runner.temp }}/maaunified-staging
     strategy:
       fail-fast: false
       matrix:
@@ -92,6 +90,16 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.meta.outputs.checkout_sha }}
+
+      - name: Initialize staging directory
+        shell: pwsh
+        run: |
+          $stagingDir = Join-Path $env:RUNNER_TEMP "maaunified-staging"
+          if (Test-Path $stagingDir) {
+            Remove-Item $stagingDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
+          "MAAUNIFIED_STAGING_DIR=$stagingDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Fetch required submodules
         shell: bash
