@@ -108,6 +108,14 @@ jobs:
         shell: bash
         run: python3 -m pip install dmgbuild
 
+      - name: Install AppImage packaging dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo add-apt-repository universe
+          sudo apt update
+          sudo apt install -y libfuse2
+
       - name: Restore app
         run: dotnet restore src/MAAUnified/App/MAAUnified.App.csproj
 
@@ -245,10 +253,17 @@ jobs:
           fi
           test -d "$staging_dir/resource"
 
-      - name: Create root launcher scripts (Linux)
+      - name: Prepare portable writable directories (Linux)
         if: runner.os == 'Linux'
         shell: bash
-        run: bash src/MAAUnified/CI/create-unix-launchers.sh "$MAAUNIFIED_STAGING_DIR" linux
+        run: |
+          staging_dir="$MAAUNIFIED_STAGING_DIR"
+          mkdir -p \
+            "$staging_dir/config" \
+            "$staging_dir/data" \
+            "$staging_dir/cache" \
+            "$staging_dir/debug" \
+            "$staging_dir/update-packages"
 
       - name: Validate staging layout (Windows)
         if: runner.os == 'Windows'
@@ -268,8 +283,14 @@ jobs:
           staging_dir="$MAAUNIFIED_STAGING_DIR"
           test -x "$staging_dir/bin/MAAUnified"
           test -d "$staging_dir/resource"
-          test -x "$staging_dir/MAAUnified"
-          test -x "$staging_dir/MAAUnified.sh"
+          test -f "$staging_dir/libMaaCore.so"
+          test -d "$staging_dir/config"
+          test -d "$staging_dir/data"
+          test -d "$staging_dir/cache"
+          test -d "$staging_dir/debug"
+          test -d "$staging_dir/update-packages"
+          ! test -e "$staging_dir/MAAUnified"
+          ! test -e "$staging_dir/MAAUnified.sh"
           ! find "$staging_dir" -maxdepth 1 -type f \( -name 'System.*.dll' -o -name 'Avalonia.*.dll' \) | grep -q .
 
       - name: Validate staging layout (macOS)
@@ -297,7 +318,20 @@ jobs:
         run: |
           mkdir -p release
           name="MAAUnified-${{ needs.meta.outputs.tag }}-${{ matrix.name }}"
-          tar -czf "release/${name}.tar.gz" -C "$MAAUNIFIED_STAGING_DIR" .
+          bash src/MAAUnified/CI/create-linux-appimage.sh "$MAAUNIFIED_STAGING_DIR" release MAAUnified x86_64
+          cp "release/MAAUnified.AppImage" "$MAAUNIFIED_STAGING_DIR/MAAUnified.AppImage"
+          (
+            cd "$MAAUNIFIED_STAGING_DIR"
+            zip -qr "$GITHUB_WORKSPACE/release/${name}.zip" .
+          )
+          test -f "release/${name}.zip"
+          unzip -Z1 "release/${name}.zip" | grep -qx 'MAAUnified.AppImage'
+          unzip -Z1 "release/${name}.zip" | grep -qx 'bin/MAAUnified'
+          unzip -Z1 "release/${name}.zip" | grep -q '^resource/'
+          unzip -Z1 "release/${name}.zip" | grep -q '^libMaaCore\.so'
+          ! unzip -Z1 "release/${name}.zip" | grep -q '^usr/share/maaunified/'
+          rm -f "release/MAAUnified.AppImage"
+          ! find release -type f -name '*linux*.tar.gz' | grep -q .
 
       - name: Package (macOS)
         if: runner.os == 'macOS'
@@ -340,5 +374,4 @@ jobs:
           name: MAAUnified-${{ needs.meta.outputs.tag }}-${{ matrix.name }}
           path: |
             release/*.zip
-            release/*.tar.gz
             release/*.dmg
