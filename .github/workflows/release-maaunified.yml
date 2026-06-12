@@ -18,7 +18,7 @@ on:
       target_repository:
         description: Repository that owns the target release
         required: false
-        default: MaaAssistantArknights/MaaAssistantArknights
+        default: Halo5082/MaaAssistantArknights
         type: string
       runtime_run_id:
         description: Workflow run id that contains MAARuntime-* artifacts; auto-resolved for beta release events
@@ -162,7 +162,7 @@ jobs:
           fi
 
           missing=()
-          for artifact in MAARuntime-linux-x86_64 MAARuntime-macos-arm64 MAARuntime-macos-x86_64; do
+          for artifact in MAARuntime-win-x64 MAARuntime-linux-x86_64 MAARuntime-macos-arm64 MAARuntime-macos-x86_64; do
             if ! gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${runtime_run_id}/artifacts" --paginate \
               --jq ".artifacts[] | select(.name == \"${artifact}\" and .expired == false) | .name" \
               | grep -qx "${artifact}"; then
@@ -202,6 +202,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - name: windows-x64
+            os: windows-2025-vs2026
+            rid: win-x64
+            runtime_artifact: MAARuntime-win-x64
           - name: linux-x64
             os: ubuntu-latest
             rid: linux-x64
@@ -295,7 +299,24 @@ jobs:
           p12-file-base64: ${{ secrets.HGUANDL_SIGN_CERT_P12 }}
           p12-password: ${{ secrets.HGUANDL_SIGN_CERT_PASSWD }}
 
-      - name: Publish MAAUnified app
+      - name: Publish MAAUnified app (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: >
+          dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r ${{ matrix.rid }}
+          --self-contained true -o "$env:MAAUNIFIED_STAGING_DIR"
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:VersionPrefix=${{ needs.meta.outputs.version_prefix }}
+          -p:VersionSuffix=${{ needs.meta.outputs.version_suffix }}
+          -p:AssemblyVersion=${{ needs.meta.outputs.assembly_version }}
+          -p:FileVersion=${{ needs.meta.outputs.file_version }}
+          -p:InformationalVersion="${{ needs.meta.outputs.informational_version }}"
+          -p:MaaUnifiedReleaseChannel=formal
+          -p:MaaUnifiedDiagnosticsProfile=minimal
+
+      - name: Publish MAAUnified app (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: >
           dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r ${{ matrix.rid }}
@@ -308,7 +329,18 @@ jobs:
           -p:MaaUnifiedReleaseChannel=formal
           -p:MaaUnifiedDiagnosticsProfile=minimal
 
-      - name: Merge MaaCore runtime
+      - name: Merge MaaCore runtime (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $stagingDir = $env:MAAUNIFIED_STAGING_DIR
+          New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
+          Copy-Item install\* $stagingDir -Recurse -Force
+          if (!(Test-Path (Join-Path $stagingDir "MaaCore.dll"))) { throw "MaaCore.dll not found in staging output." }
+          if (!(Test-Path (Join-Path $stagingDir "resource"))) { throw "resource directory not found in staging output." }
+
+      - name: Merge MaaCore runtime (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           staging_dir="$MAAUNIFIED_STAGING_DIR"
@@ -321,7 +353,17 @@ jobs:
           fi
           test -d "$staging_dir/resource"
 
-      - name: Remove non-runtime artifacts from release package
+      - name: Remove non-runtime artifacts from release package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $stagingDir = $env:MAAUNIFIED_STAGING_DIR
+          Get-ChildItem $stagingDir -Filter *.pdb -File -Recurse | Remove-Item -Force
+          Remove-Item (Join-Path $stagingDir "AsstCaller.h") -Force -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $stagingDir "AsstPort.h") -Force -ErrorAction SilentlyContinue
+
+      - name: Remove non-runtime artifacts from release package (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           staging_dir="$MAAUNIFIED_STAGING_DIR"
@@ -339,6 +381,19 @@ jobs:
             "$staging_dir/cache" \
             "$staging_dir/debug" \
             "$staging_dir/update-packages"
+
+      - name: Validate staging layout (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $stagingDir = $env:MAAUNIFIED_STAGING_DIR
+          if (!(Test-Path (Join-Path $stagingDir "MAAUnified.exe"))) { throw "Windows GUI executable not found at staging root." }
+          if (!(Test-Path (Join-Path $stagingDir "MaaCore.dll"))) { throw "MaaCore.dll not found in staging output." }
+          if (!(Test-Path (Join-Path $stagingDir "resource"))) { throw "resource directory not found under staging root." }
+          if (Test-Path (Join-Path $stagingDir "MAAUnified.cmd")) { throw "Legacy cmd launcher should not be included in Windows package." }
+          $rootManaged = @(Get-ChildItem $stagingDir -File | Where-Object { $_.Name -like 'System.*.dll' -or $_.Name -like 'Avalonia.*.dll' })
+          if ($rootManaged.Count -gt 0) { throw "Managed DLLs should not be placed at staging root." }
+          if ((Get-ChildItem $stagingDir -Filter *.pdb -File -Recurse | Measure-Object).Count -gt 0) { throw "PDB files should not be included in formal release packages." }
 
       - name: Validate staging layout (Linux)
         if: runner.os == 'Linux'
@@ -436,6 +491,14 @@ jobs:
           rm -f "AuthKey_${APPSTORE_KEYID}.p8"
           xcrun stapler staple "$dmg"
           spctl -a -t open --context context:primary-signature -v "$dmg"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path release -Force | Out-Null
+          $name = "MAAUnified-${{ needs.meta.outputs.tag }}-${{ matrix.name }}"
+          Compress-Archive -Path "$env:MAAUNIFIED_STAGING_DIR\*" -DestinationPath "release\$name.zip"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v7
