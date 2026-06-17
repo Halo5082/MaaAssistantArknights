@@ -47,8 +47,8 @@ jobs:
         env:
           CHECKOUT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          echo "checkout_sha=${CHECKOUT_SHA}" >> "$GITHUB_OUTPUT"
           short_sha="${CHECKOUT_SHA::7}"
+          echo "checkout_sha=${CHECKOUT_SHA}" >> "$GITHUB_OUTPUT"
           echo "tag=debug-${short_sha}" >> "$GITHUB_OUTPUT"
           echo "version_suffix=debug.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
           echo "informational_version=debug-${short_sha}" >> "$GITHUB_OUTPUT"
@@ -87,7 +87,7 @@ jobs:
             maadeps_triplet: arm64-osx
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.meta.outputs.checkout_sha }}
 
