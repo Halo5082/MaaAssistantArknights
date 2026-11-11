@@ -32,7 +32,7 @@
         "colorScales": [
             [
                 [0, 200, 200],
-                [10, 220, 255]
+                [10, 235, 255]
             ]
         ]
     },
@@ -256,7 +256,13 @@
         "algorithm": "OcrDetect",
         "text": ["交换"],
         "roi": [575, 558, 127, 50],
-        "preDelay": 1000
+        "preDelay": 1000,
+        "next": ["JieGarden@Roguelike@CoppersExchangeFinishReCheck", "Stop"]
+    },
+    "JieGarden@Roguelike@CoppersExchangeFinishReCheck": {
+        "Doc": "通宝交换完成后的交换按钮 (兜底检查)",
+        "baseTask": "JieGarden@Roguelike@CoppersExchangeFinish",
+        "next": ["JieGarden@Roguelike@CoppersExchangeFinish#next"]
     },
     "JieGarden@Roguelike@CoppersListDialogConfirm": {
         "Doc": "通宝列表界面弹出的确认按钮",
@@ -536,13 +542,7 @@
     },
     "JieGarden@Roguelike@GamePass": {},
     "JieGarden@Roguelike@GamePassSkip1": {},
-    "JieGarden@Roguelike@GamePassSkip1Confirm": {
-        "next": [
-            "JieGarden@Roguelike@GamePassSkip2",
-            "JieGarden@Roguelike@GamePassTheEndConfirm",
-            "JieGarden@Roguelike@GamePass"
-        ]
-    },
+    "JieGarden@Roguelike@GamePassSkip1Confirm": {},
     "JieGarden@Roguelike@GamePassSkip2": {},
     "JieGarden@Roguelike@GamePassTheEndConfirm": {
         "roi": [580, 550, 120, 90]
@@ -1461,7 +1461,7 @@
         "template": "Roguelike@QuickFormation.png"
     },
     "JieGarden@RoguelikeEncounter-ClickOption": {
-        "doc": "点击选项右侧位置以选择事件选项，再次点击可以确认选择",
+        "doc": "点击选项右侧位置以选择事件选项；插件观察确认出现后点击确认，连续无变化满3秒才重点击",
         "algorithm": "JustReturn",
         "action": "ClickRect",
         "specificRect": [1175, 0, 100, 43]
@@ -1472,7 +1472,7 @@
         "action": "Swipe",
         "specificRect": [750, 200, 1, 1],
         "rectMove": [750, 500, 1, 1],
-        "specialParams": [150, 0, 2, 0],
+        "specialParams": [150, 0, 20, 0],
         "postDelay": 500
     },
     "JieGarden@RoguelikeEncounter-MoveDown": {
@@ -1481,7 +1481,7 @@
         "action": "Swipe",
         "specificRect": [750, 500, 1, 1],
         "rectMove": [750, 200, 1, 1],
-        "specialParams": [150, 0, 2, 0],
+        "specialParams": [150, 0, 20, 0],
         "postDelay": 500
     },
     "JieGarden@RoguelikeEncounter-MoveUp": {
@@ -1490,7 +1490,7 @@
         "action": "Swipe",
         "specificRect": [750, 200, 1, 1],
         "rectMove": [750, 500, 1, 1],
-        "specialParams": [150, 0, 2, 0],
+        "specialParams": [150, 0, 20, 0],
         "postDelay": 500
     },
     "JieGarden@RoguelikeEncounterOptionAnalyzer-Option": {

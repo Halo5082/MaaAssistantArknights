@@ -1,6 +1,6 @@
 // <copyright file="AchievementTrackerHelper.cs" company="MaaAssistantArknights">
 // Part of the MaaWpfGui project, maintained by the MaaAssistantArknights team (Maa Team)
-// Copyright (C) 2021-2025 MaaAssistantArknights Contributors
+// Copyright (C) 2021-2026 MaaAssistantArknights Contributors
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License v3.0 only as published by
@@ -44,39 +44,8 @@ public class AchievementTrackerHelper : PropertyChangedBase
         InitializeAchievements();
         Load();
         Sort();
-        if (Instances.MainWindowManager is not null)
-        {
-            AttachWindowRestoredHandler();
-        }
-        else
-        {
-            // 这里可以简化，因为事件触发时 MainWindowManager 肯定不为 null
-            Instances.MainWindowManagerInstantiated += (_, _) => {
-                var win = Instances.MainWindowManager?.GetWindowIfVisible();
-                if (win == null)
-                {
-                    AttachWindowRestoredHandler();
-                }
-                else
-                {
-                    TryShowPendingGrowls();
-                }
-            };
-        }
 
         SearchCmd = new RelayCommand<string>(Search);
-    }
-
-    private void AttachWindowRestoredHandler()
-    {
-        // 防止重复订阅
-        Instances.MainWindowManager.WindowRestored -= OnWindowRestored;
-        Instances.MainWindowManager.WindowRestored += OnWindowRestored;
-    }
-
-    private void OnWindowRestored(object? sender, EventArgs e)
-    {
-        TryShowPendingGrowls();
     }
 
     public static AchievementTrackerHelper Instance { get; } = new();
@@ -245,7 +214,7 @@ public class AchievementTrackerHelper : PropertyChangedBase
 
         var growlInfo = new GrowlInfo {
             IsCustom = true,
-            Message = $"{LocalizationHelper.GetString("AchievementCelebrate")}: {achievement.Title}\n{achievement.Description}",
+            Message = $"{LocalizationHelper.GetString("Achievement.Celebrate")}: {achievement.Title}\n{achievement.Description}",
             StaysOpen = forceStayOpen || (staysOpen && !SettingsViewModel.AchievementSettings.AchievementPopupAutoClose),
             WaitTime = 15,
             IconKey = "HangoverGeometry",
@@ -307,8 +276,6 @@ public class AchievementTrackerHelper : PropertyChangedBase
 
     private static readonly Dictionary<GrowlInfo, string> _growlAchievementMap = [];
 
-    private static readonly List<GrowlInfo> _pending = [];
-
     public static void ShowInfo(GrowlInfo info, bool forceStayOpen = false)
     {
         // 检查是否禁用了成就通知
@@ -317,14 +284,7 @@ public class AchievementTrackerHelper : PropertyChangedBase
             return;
         }
 
-        Execute.OnUIThread(() => {
-            var win = Instances.MainWindowManager?.GetWindowIfVisible();
-            if (win == null)
-            {
-                _pending.Add(info);
-                return;
-            }
-
+        GrowlHelper.Show(InfoType.Info, info.Message, () => {
             var previousItems = Growl.GrowlPanel?.Children.OfType<UIElement>().ToHashSet() ?? [];
             Growl.Info(info);
             AttachGrowlClickHandler(info, previousItems);
@@ -443,20 +403,6 @@ public class AchievementTrackerHelper : PropertyChangedBase
             }));
     }
 
-    public static void TryShowPendingGrowls()
-    {
-        Execute.OnUIThread(() => {
-            foreach (var info in _pending)
-            {
-                var previousItems = Growl.GrowlPanel?.Children.OfType<UIElement>().ToHashSet() ?? [];
-                Growl.Info(info);
-                AttachGrowlClickHandler(info, previousItems);
-            }
-
-            _pending.Clear();
-        });
-    }
-
     private void CheckProgressUnlock(Achievement achievement)
     {
         if (achievement.IsUnlocked ||
@@ -568,7 +514,7 @@ public class AchievementTrackerHelper : PropertyChangedBase
     public void CheckTimeManagementMaster()
     {
         var timerSettings = SettingsViewModel.TimerSettings;
-        if (timerSettings.TimerModels.Timers.Any(timer => timer.IsOn != true))
+        if (timerSettings.TimerList.Any(timer => timer.IsEnabled != true))
         {
             return;
         }

@@ -55,6 +55,13 @@ bool OcrPack::load(const std::filesystem::path& path)
         m_impl->det_model_path = det_model_file;
         m_impl->ncnn = nullptr;
     }
+    else if (m_impl->det_model_path.empty()) {
+        const auto fallback_det_file = path.parent_path() / "PaddleOCR" / "det" / "det.ncnn.param"_p;
+        if (std::filesystem::exists(fallback_det_file)) {
+            m_impl->det_model_path = fallback_det_file;
+            m_impl->ncnn = nullptr;
+        }
+    }
     if (std::filesystem::exists(rec_model_file) && m_impl->rec_model_path != rec_model_file) {
         m_impl->rec_model_path = rec_model_file;
         m_impl->ncnn = nullptr;
@@ -164,11 +171,11 @@ constexpr int kDetLimitSideLen = 960;
 constexpr float kDetMean[3] = { 0.485f * 255.f, 0.456f * 255.f, 0.406f * 255.f };
 constexpr float kDetNorm[3] = { 1.f / (0.229f * 255.f), 1.f / (0.224f * 255.f), 1.f / (0.225f * 255.f) };
 
-constexpr float kDetThresh = 0.3f;
-constexpr float kDetBoxThresh = 0.6f;
-constexpr float kDetUnclipRatio = 1.5f;
+constexpr float kDetThresh = 0.2f;
+constexpr float kDetBoxThresh = 0.45f;
+constexpr float kDetUnclipRatio = 1.4f;
 constexpr int kDetMinSize = 3;
-constexpr int kDetMaxCandidates = 1000;
+constexpr int kDetMaxCandidates = 3000;
 
 constexpr int kRecImgH = 48;
 constexpr int kRecImgW = 320;
@@ -380,7 +387,7 @@ std::vector<asst::OcrPackNcnn::DetBox> asst::OcrPackNcnn::detect(const cv::Mat& 
     // 与 fastdeploy 的 OcrDetectorGetInfo 对齐
     // 之前用 ceil 对齐：小 ROI 上 ceil 会过度横向拉伸（如 106→128 比 round 的 106→96 多拉 ~21%），
     // 改变文字长宽比，使 DBNet 概率脊偏扁、检测框竖向过紧而切掉小字首笔，导致 rec 误识
-    // （实测「聚羽之地」被读成「袭羽之地」；改 round 后框 16px→20px，两个字段均正确且置信度更高）。
+    // （实测 ｢聚羽之地｣ 被读成 ｢袭羽之地｣ ；改 round 后框 16px→20px，两个字段均正确且置信度更高）。
     auto align32 = [](const int v) {
         return std::max(32, static_cast<int>(std::round(v / 32.f)) * 32);
     };
@@ -441,7 +448,7 @@ std::vector<asst::OcrPackNcnn::DetBox> asst::OcrPackNcnn::detect(const cv::Mat& 
 
         // 对齐 fastdeploy PostProcessor::UnClip：对 box 多边形做 jtRound 偏移再取 minAreaRect。
         // 之前的近似（RotatedRect 宽高各 +2*dist）在小字上框偏紧约 0.5~1px，叠加 det 的各向异性回缩后
-        // 会切掉笔画导致 rec 误识（实测 1080P 缩放后「丰饶灌木林」被读成「丰烧濯木林」，破坏 ocrReplace 锚点；
+        // 会切掉笔画导致 rec 误识（实测 1080P 缩放后 ｢丰饶灌木林｣ 被读成 ｢丰烧濯木林｣ ，破坏 ocrReplace 锚点；
         // 改用 Clipper 后框高 14→15px、rec 置信度 0.83→0.94，与桌面 fastdeploy / 720P 表现一致）。
         ClipperLib::Path poly;
         for (int pi = 0; pi < 4; ++pi) {
