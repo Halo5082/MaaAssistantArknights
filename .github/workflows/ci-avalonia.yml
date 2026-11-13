@@ -49,6 +49,14 @@ jobs:
       - name: Restore tests
         run: dotnet restore src/MAAUnified/Tests/MAAUnified.Tests.csproj
 
+      - name: Verify C# formatting
+        if: matrix.name == 'linux-x64'
+        shell: bash
+        run: |
+          for project in Tests App Application Platform Compat; do
+            dotnet format "src/MAAUnified/$project/MAAUnified.$project.csproj" --verify-no-changes --no-restore
+          done
+
       - name: Run Linux baseline consistency gate
         if: matrix.name == 'linux-x64'
         run: >
